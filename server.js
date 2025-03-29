@@ -10,6 +10,7 @@ const roomRoutes = require('./routes/roomRoutes');
 const supervisorRoutes = require('./routes/supervisorRoutes');
 const validationRoutes = require('./routes/validationRoutes');
 const subjectRoutes = require('./routes/subjectRoutes');
+const sessionRoutes = require('./routes/sessionRoutes');
 
 //middleware
 const verifyJWT = require('./middleware/verifyJWT');
@@ -38,6 +39,7 @@ app.use('/api/auth', authRoutes);
 app.use(verifyJWT) // Toutes les routes en dessous de cette ligne nécessitent une authentification
 
 app.use('/api/exams', examRoutes);
+app.use('/api/sessions', sessionRoutes);
 app.use('/api/rooms', roomRoutes); 
 app.use('/api/supervisors', supervisorRoutes)
 app.use('/api/validateExams', validationRoutes)
