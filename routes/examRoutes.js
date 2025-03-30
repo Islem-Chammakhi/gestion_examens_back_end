@@ -3,12 +3,15 @@ const router = express.Router();
 
 // Import the examControllers
 const { getAllExams,getNotReservedExams,getExamById, createExam, updateExam, deleteExam,getExamsByDeaprtment,getNotValidatedExamsByDeaprtment,getValidatedExamsByDeaprtment ,getNotValidatedExamsByDirector,
-    getAllAssignedExams ,getPlanningForDirector,getExamsByRoomId,getExamsBySupervisorId} = require('../controllers/examController');
+    getAllAssignedExams ,getPlanningForDirector,getExamsByRoomId,getExamsBySupervisorId,getExamsBySessionId} = require('../controllers/examController');
 
 const verifyRole = require('../middleware/verifyRole')
 
 // Get all exams
 router.get('/getAllExams/:page',verifyRole("ADMIN"), getAllExams);
+
+// Get all exams by session id
+router.get('/getExamsBySessionId/:session_id/:page',verifyRole("ADMIN"), getExamsBySessionId);
 
 // get all assigned exams 
 router.get('/getAllAssignedExams',verifyRole("ADMIN"), getAllAssignedExams);

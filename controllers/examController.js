@@ -2,44 +2,37 @@ const { PrismaClient } = require('@prisma/client')
 const prisma = new PrismaClient()
 const {itemPerPage}=require('../config/settings')
 const {addLog} =require('../services/schedulelogService')
-
+const {getSessionById}=require('../services/sessionService')
+const {getExams,getExamById}=require('../services/examServices')
 // exams controllers
 
 const getAllExams = async (req, res) => {
+  const {session_id}=req.body
   const {page}=req.params
     try {
-        // const exams = await prisma.exam.findMany();  // Fetch tous les utilisateurs
-        // res.json(exams);  // Retourner les utilisateurs en format JSON
-        const exams= await prisma.exam.findMany({
-            select:{
-              exam_id:true,
-              exam_date:true,
-              duration:true,
-              subject:{
-                select:{
-                    name:true,
-                    coefficient:true,
-                    department_id:true,
-                    filiere_name:true,
+      const session=await getSessionById(parseInt(session_id))
+      if (!session) {
+        return res.status(404).json({ error: "Session introuvable" });
+      }
+      if(session.is_validated===true){
+        return res.status(400).json({ error: "Vous devez créer une session" });
+      }
+      const exams= await getExams(page,parseInt(session_id))
+          console.log(exams);
+          res.status(200).json(exams);
+      } catch (error) {
+        res.status(500).json({ error: 'Une erreur est survenue lors de la récupération des examens' });
+      }
+}
 
-                }
-              },
-              examroom:{
-                select:{
-                    start_time:true,
-                    end_time:true,
-                    room:{
-                        select:{
-                            room_name:true,
-                        }
-                    }
-                }
-              },
-        
-            },
-            take:itemPerPage,
-            skip:itemPerPage * (page-1)
-          });
+const getExamsBySessionId=async (req, res) => {
+  const {page,session_id}=req.params
+    try {
+      const session=await getSessionById(parseInt(session_id))
+      if (!session) {
+        return res.status(404).json({ error: "Session introuvable" });
+      }
+      const exams= await getExams(page,parseInt(session_id))
           console.log(exams);
           res.status(200).json(exams);
       } catch (error) {
@@ -50,37 +43,11 @@ const getAllExams = async (req, res) => {
 const getExamById=async(req,res)=>{
   const {id}=req.params
   try {
-    const exam= await prisma.exam.findUnique({
-        where:{
-          exam_id:parseInt(id)
-        },
-        select:{
-          exam_id:true,
-          exam_date:true,
-          duration:true,
-          subject:{
-            select:{
-                name:true,
-                coefficient:true,
-                department_id:true,
-                filiere_name:true,
-            }
-          },
-          examroom:{
-            select:{
-                start_time:true,
-                end_time:true,
-                room:{
-                    select:{
-                        room_name:true,
-                    }
-                }
-            }
-          },
-    
-        },
-      });
-      res.status(200).json(exam);
+    const exam= await getExamById(parseInt(id))
+    if (!exam) {
+      return res.status(404).json({ error: "Examen introuvable" });
+    }
+      return res.status(200).json(exam);
   } catch (error) {
     res.status(500).json({ error: 'Une erreur est survenue lors de la récupération de cet examen' });
   }
@@ -518,9 +485,18 @@ const getPlanningForDirector = async (req, res) => {
 }
 
 const createExam = async (req, res) => {
-    const { subject_id, exam_date, duration, email } = req.body;  // Récupérer les données du corps de la requête
+    const { subject_id, exam_date, duration, email,session_id } = req.body
   
     try {
+      // Vérifier si la session existe
+      const session=await getSessionById(parseInt(session_id))
+      if (!session) {
+        return res.status(404).json({ error: "Session introuvable" });
+      }
+      if(session.is_validated===true){
+        return res.status(400).json({ error: "Vous devez créer une session" });
+      }
+
       // Démarrer la transaction
       const result = await prisma.$transaction(async (prisma) => {
         // Recherche d'un examen avec le même sujet
@@ -559,6 +535,11 @@ const createExam = async (req, res) => {
                 subject_id: parseInt(subject_id),
               },
             },
+            session:{
+              connect: {
+                session_id: parseInt(session_id),
+              }
+            }
           },
         });
         return exam
@@ -595,8 +576,16 @@ const createExam = async (req, res) => {
 
 const updateExam = async (req, res) => {
     const { exam_id } = req.params;
-    const { exam_date} = req.body;
+    const { exam_date, session_id } = req.body;
     try{
+      const session = await getSessionById(parseInt(session_id));
+      if (!session) {
+        return res.status(404).json({ error: "Session introuvable" });
+      }
+      if(session.is_validated===true){
+        return res.status(400).json({ error: "La session est déjà validée" });
+      }
+      
       const verifyConflict = await prisma.examroom.findFirst({
         where: {
           exam_id: parseInt(exam_id),
@@ -607,7 +596,6 @@ const updateExam = async (req, res) => {
           room_id:true
         }
       })
-
       if(verifyConflict){
         const isReserved = await prisma.examroom.findFirst({
           where:{
@@ -744,6 +732,7 @@ module.exports = {
     getExamById,
     getExamsByRoomId,
     getExamsBySupervisorId,
+    getExamsBySessionId,
     createExam,
     updateExam,
     deleteExam,

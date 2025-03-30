@@ -39,8 +39,18 @@ const createSession = async (type, startDate, endDate) => {
   });
 };
 
+const getSessionById = async (id) => {
+  return prisma.session.findUnique({
+    where: {
+      session_id: id,
+    },
+  });
+}
+
+
 module.exports = {
   getPaginatedSessions,
   validateSessionCreation,
-  createSession
+  createSession,
+  getSessionById,
 };
