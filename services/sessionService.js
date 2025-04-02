@@ -9,48 +9,47 @@ const getPaginatedSessions = async (page) => {
   });
 };
 
-const validateSessionCreation = async (type, startDate) => {
+const validateSessionCreation = async (sessionType, startDate) => {
   const year = new Date(startDate).getFullYear();
   
   const existingSession = await prisma.session.findFirst({
     where: {
-      type,
-      startDate: {
+      session_type:sessionType,
+      date_debut: {
         gte: new Date(`${year}-01-01`),
         lte: new Date(`${year}-12-31`)
       }
     }
   });
   if (existingSession) {
-    throw new Error(`Une session de type ${type} existe déjà pour ${year}`);
+    throw new Error(`Une session de type ${sessionType} existe déjà pour ${year}`);
   }
 
   const existingUnvalidated = await prisma.session.findFirst({
-    where: { validated: false }
+    where: { is_validated: false }
   });
   if (existingUnvalidated) {
     throw new Error('Une session non validée existe déjà');
   }
 };
 
-const createSession = async (type, startDate, endDate) => {
+const createSession = async (sessionType, startDate, endDate) => {
   return prisma.session.create({
-    data: { type, startDate, endDate }
+    data: { session_type: sessionType, date_debut: startDate, date_fin: endDate }
   });
 };
 
-const getSessionById = async (id) => {
-  return prisma.session.findUnique({
+const getCurrentSession = async () => {
+  return prisma.session.findFirst({
     where: {
-      session_id: id,
-    },
+      is_validated:false
+    }
   });
 }
-
 
 module.exports = {
   getPaginatedSessions,
   validateSessionCreation,
   createSession,
-  getSessionById,
+  getCurrentSession,
 };
