@@ -8,7 +8,7 @@ const { getAllExams,getNotReservedExams,getExamById, createExam, updateExam, del
 const verifyRole = require('../middleware/verifyRole')
 
 // Get all exams
-router.get('/getAllExams/:page',verifyRole("ADMIN"), getAllExams);
+router.get('/getAllExams/:page/:session_id',verifyRole("ADMIN"), getAllExams);
 
 // Get all exams by session id
 router.get('/getExamsBySessionId/:session_id/:page',verifyRole("ADMIN"), getExamsBySessionId);

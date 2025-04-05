@@ -43,8 +43,78 @@ const getCurrentSession = async () => {
   return prisma.session.findFirst({
     where: {
       is_validated:false
+    },
+    orderBy: {
+      date_debut: 'desc'
     }
   });
+}
+
+const getSessionById = async (id) => {
+  return prisma.session.findUnique({
+    where: { session_id:id }
+  });
+}
+
+const autoValidateSession = async () => {
+
+  const today = new Date();
+  const fourDaysLater = new Date();
+  fourDaysLater.setDate(today.getDate() + 4);
+
+  const todayStr = today.toISOString().split('T')[0];
+  const fourDaysLaterStr = fourDaysLater.toISOString().split('T')[0];
+
+  const alreadyRun = await prisma.schedulelog.findFirst({
+    where: {
+      action: 'SESSION_AUTO_VALIDATION',
+      timestamp: {
+        gte: new Date(todayStr) 
+      }
+    }
+  });
+
+  if (alreadyRun) return { message: "auto-validation est déja effectuée" };
+
+  const sessionsToValidate = await prisma.session.findFirst({
+    where: {
+      is_validated: false,
+      date_debut: {
+        equals: new Date(fourDaysLaterStr) 
+      }
+    },
+    select: {
+      session_id: true,
+      date_debut: true
+    }
+  });
+
+  if (!sessionsToValidate) {
+    return { validated: false, message: 'pas de session à valider' };
+  }
+
+  const validationResults= await prisma.$transaction(async (prisma) => {
+
+    await prisma.session.update({
+      where: { session_id: sessionsToValidate.session_id },
+      data: { is_validated: true }
+    });
+    const user = await prisma.user.findFirst({
+      where: { role: 'ADMIN' },
+      select: { user_id: true }
+    });
+
+    await prisma.schedulelog.create({
+      data: {
+        action: 'SESSION_AUTO_VALIDATION',
+        description: `Auto-validé ${sessionsToValidate.length} sessions pour ${fourDaysLaterStr}`,
+        performed_by: user.user_id,
+        timestamp: new Date()
+      }
+    })
+  })
+  return { validated: true, sessionId: sessionsToValidate.session_id,message: 'session validée avec succès' };
+
 }
 
 module.exports = {
@@ -52,4 +122,6 @@ module.exports = {
   validateSessionCreation,
   createSession,
   getCurrentSession,
+  getSessionById,
+  autoValidateSession,
 };

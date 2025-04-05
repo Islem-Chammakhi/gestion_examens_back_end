@@ -2,6 +2,10 @@ require('dotenv').config(); // Charger les variables d'environnement
 const cookieParser = require('cookie-parser')
 const express = require('express')
 const cors = require('cors');
+const cron = require('node-cron');
+
+// importer l'automatisation de la validation des sessions
+const { autoValidateSession } = require('./services/sessionService')
 
 // Importer les routes
 const authRoutes = require('./routes/authRoutes');
@@ -47,7 +51,17 @@ app.use('/api/subjects', subjectRoutes)
 
 
 // Démarrer le serveur
-app.listen(port, () => {
+app.listen(port, async () => {
   console.log(`Serveur démarré sur le port ${port}`);
+
+    // Exécution immédiate si nécessaire
+    const result =await autoValidateSession().catch(console.error);
+    console.log(result)
+    // Planification quotidienne
+    cron.schedule('0 0 * * *', () => {
+      autoValidateSession()
+        .then(result => console.log(`Auto-validation: ${result} sessions`))
+        .catch(console.error);
+    });
 });
 

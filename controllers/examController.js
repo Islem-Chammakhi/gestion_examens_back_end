@@ -3,12 +3,11 @@ const prisma = new PrismaClient()
 const {itemPerPage}=require('../config/settings')
 const {addLog} =require('../services/schedulelogService')
 const {getSessionById}=require('../services/sessionService')
-const {getExams,getExamById}=require('../services/examServices')
+const {getExams,getExam}=require('../services/examServices')
 // exams controllers
 
 const getAllExams = async (req, res) => {
-  const {session_id}=req.body
-  const {page}=req.params
+  const {page,session_id}=req.params
     try {
       const session=await getSessionById(parseInt(session_id))
       if (!session) {
@@ -18,7 +17,6 @@ const getAllExams = async (req, res) => {
         return res.status(400).json({ error: "Vous devez créer une session" });
       }
       const exams= await getExams(page,parseInt(session_id))
-          console.log(exams);
           res.status(200).json(exams);
       } catch (error) {
         res.status(500).json({ error: 'Une erreur est survenue lors de la récupération des examens' });
@@ -33,8 +31,13 @@ const getExamsBySessionId=async (req, res) => {
         return res.status(404).json({ error: "Session introuvable" });
       }
       const exams= await getExams(page,parseInt(session_id))
-          console.log(exams);
-          res.status(200).json(exams);
+          if(exams){
+            res.status(200).json(exams);
+          }
+          else{
+            res.status(404).json({ error: "vous n'avez pas encore ajouter des examens pour cette session" });
+          }
+          
       } catch (error) {
         res.status(500).json({ error: 'Une erreur est survenue lors de la récupération des examens' });
       }
@@ -43,7 +46,7 @@ const getExamsBySessionId=async (req, res) => {
 const getExamById=async(req,res)=>{
   const {id}=req.params
   try {
-    const exam= await getExamById(parseInt(id))
+    const exam= await getExam(parseInt(id))
     if (!exam) {
       return res.status(404).json({ error: "Examen introuvable" });
     }
@@ -485,110 +488,143 @@ const getPlanningForDirector = async (req, res) => {
 }
 
 const createExam = async (req, res) => {
-    const { subject_id, exam_date, duration, email,session_id } = req.body
-  
-    try {
-      // Vérifier si la session existe
-      const session=await getSessionById(parseInt(session_id))
-      if (!session) {
-        return res.status(404).json({ error: "Session introuvable" });
+  const { subject_id, exam_date, duration, email, session } = req.body;
+
+  try {
+      // Vérification de la session
+      const getSession = await getSessionById(parseInt(session.session_id));
+      if (!getSession) {
+          return res.status(404).json({ error: "Session introuvable" });
       }
-      if(session.is_validated===true){
-        return res.status(400).json({ error: "Vous devez créer une session" });
+      if(getSession.is_validated === true){
+          return res.status(400).json({ error: "Vous devez créer une session" });
       }
 
-      // Démarrer la transaction
-      const result = await prisma.$transaction(async (prisma) => {
-        // Recherche d'un examen avec le même sujet
-        const duplicate = await prisma.exam.findFirst({
-          where: {
-            subject_id: parseInt(subject_id),
-          },
-});
-  
-        console.log('Duplicate exam:', duplicate);
-  
-        let is_duplicate = false;
-        if (duplicate) {
-          is_duplicate = true;
-          // Mise à jour de l'examen existant
-          const updateExams = await prisma.exam.update({
-            where: {
-              exam_id: duplicate.exam_id, // Utilise exam_id pour la mise à jour
-            },
-            data: {
-              is_duplicate: is_duplicate,
-            },
+      // Vérification des dates
+      const examDate = new Date(exam_date);
+      const sessionStart = new Date(session.date_debut);
+      const sessionEnd = new Date(session.date_fin);
+
+      if (examDate < sessionStart || examDate > sessionEnd) {
+          return res.status(400).json({
+              error: `La date de l'examen doit être entre ${sessionStart.toISOString().split('T')[0]} et ${sessionEnd.toISOString().split('T')[0]}`
           });
-  
-          console.log('Updated exam:', updateExams);
-        }
-  
-        // Création de l'examen
-        const exam = await prisma.exam.create({
-          data: {
-            exam_date:new Date(exam_date).toISOString(),
-            is_duplicate,
-            duration,
-            subject: {
-              connect: {
-                subject_id: parseInt(subject_id),
-              },
-            },
-            session:{
-              connect: {
-                session_id: parseInt(session_id),
-              }
-            }
-          },
-        });
-        return exam
-      });
-      const user_id=await prisma.user.findFirst({
-        where:{
-          email:email
-        },
-        select:{
-          user_id:true
-        }
-      })
-      const subjectInfo=await prisma.subject.findUnique({
-        where:{
-          subject_id:parseInt(subject_id)
-        },
-        select:{
-          name:true,
-          filiere_name:true
-        }
-      })
-      const log={
-        action:"Ajout",
-        description:`un examen pour le sujet ${subjectInfo.name} de la filiere ${subjectInfo.filiere_name} a été créé`,
-        performed_by:user_id.user_id
       }
-      await addLog(log);
-      res.status(201).json(result);  // Retourner l'examen créé
-    } catch (error) {
-      console.error('Error creating exam:', error); // Afficher l'erreur
-      res.status(500).json({ error: 'Une erreur est survenue lors de la création de l\'examen' });
-    }
-}
+
+      // Vérification des doublons avant la transaction
+      const duplicate = await prisma.exam.count({
+          where: { subject_id: parseInt(subject_id),
+            session_id:parseInt(session.session_id)
+           }
+      });
+
+      const nbGroup = await prisma.group.count({
+          where: {
+              filiere: {
+                  subjects: { some: { subject_id: parseInt(subject_id) } }
+              }
+          }
+      });
+
+      if(nbGroup === duplicate){
+          return res.status(409).json({ error: "Vous avez déjà ajouté un examen pour ce sujet pour tous les groupes de ce filiére" });
+      }
+
+      const existingExams = await prisma.exam.findMany({
+        where: {
+            subject_id: parseInt(subject_id),
+        },
+        select: {
+            exam_date: true,
+            duration: true,
+          }
+      });
+      if (existingExams.length > 0) {
+        const firstExamDate = new Date(existingExams[0].exam_date).toISOString();
+        const newExamDate = examDate.toISOString();
+        let msg=""
+        if (firstExamDate !== newExamDate) {
+              msg= "La date doit correspondre aux examens existants pour ce sujet"
+        }
+        if(existingExams[0].duration !== duration) {
+                msg= "La durée doit correspondre aux examens existants pour ce sujet"
+        }
+        if (msg !== "") {
+            return res.status(400).json({ error: msg });
+        }
+      }
+
+      // Transaction
+      const exam = await prisma.$transaction(async (prisma) => {
+          let is_duplicate = duplicate > 0;
+
+          if (is_duplicate) {
+              await prisma.exam.updateMany({
+                  where: { subject_id: parseInt(subject_id) },
+                  data: { is_duplicate: true }
+              });
+          }
+
+          return prisma.exam.create({
+              data: {
+                  exam_date: new Date(exam_date).toISOString(),
+                  is_duplicate,
+                  duration,
+                  subject: { connect: { subject_id: parseInt(subject_id) } },
+                  session: { connect: { session_id: parseInt(session.session_id) } }
+              },
+              select: { // Spécifiez explicitement les champs à retourner
+                  exam_id: true,
+                  exam_date: true,
+                  duration: true,
+                  subject_id: true,
+                  session_id: true
+              }
+          });
+      });
+
+      // Log
+      const user_id = await prisma.user.findFirst({
+          where: { email: email },
+          select: { user_id: true }
+      });
+
+      const subjectInfo = await prisma.subject.findUnique({
+          where: { subject_id: parseInt(subject_id) },
+          select: { name: true, filiere_name: true }
+      });
+
+      await addLog({
+          action: "Ajout",
+          description: `un examen pour le sujet ${subjectInfo.name} de la filiere ${subjectInfo.filiere_name} a été créé`,
+          performed_by: user_id.user_id
+      });
+
+      return res.status(201).json(exam);
+  } catch (error) {
+      console.error('Error creating exam:', error);
+      return res.status(500).json({ error: 'Une erreur est survenue lors de la création de l\'examen' });
+  }
+};
 
 const updateExam = async (req, res) => {
     const { exam_id } = req.params;
-    const { exam_date, session_id } = req.body;
+    const { exam_date, session,subject_id } = req.body;
     try{
-      const session = await getSessionById(parseInt(session_id));
-      if (!session) {
+      const getSession = await getSessionById(parseInt(session.session_id));
+      if (!getSession) {
         return res.status(404).json({ error: "Session introuvable" });
       }
-      if(session.is_validated===true){
+      if(getSession.is_validated===true){
         return res.status(400).json({ error: "La session est déjà validée" });
       }
       
-      const verifyConflict = await prisma.examroom.findFirst({
+      const currentReservation  = await prisma.examroom.findFirst({
         where: {
           exam_id: parseInt(exam_id),
+          exam:{
+            session_id:parseInt(getSession.session_id)
+          }
         },
         select:{
           start_time:true,
@@ -596,23 +632,31 @@ const updateExam = async (req, res) => {
           room_id:true
         }
       })
-      if(verifyConflict){
-        const isReserved = await prisma.examroom.findFirst({
+      let newStartTime
+      let newEndTime
+      if(currentReservation?.room_id){
+        const newExamDate = new Date(exam_date)
+        const newExamDay = newExamDate.toISOString().split('T')[0]
+        console.log(newExamDay)
+        newStartTime = new Date(`${newExamDay}T${currentReservation.start_time.toISOString().split('T')[1]}`);
+        newEndTime = new Date(`${newExamDay}T${currentReservation.end_time.toISOString().split('T')[1]}`);
+        
+        const conflict = await prisma.examroom.findFirst({
           where:{
             AND: [
-              {room_id:verifyConflict.room_id},
+              {room_id:currentReservation.room_id},
               { NOT: { exam_id: parseInt(exam_id) }},
               {
                 OR: [
                     // Cas 1: Nouvel examen commence pendant un examen existant
                     {
-                        start_time: { lt: verifyConflict.end_time },
-                        end_time: { gt: verifyConflict.start_time }
+                        start_time: { lt: newEndTime  },
+                        end_time: { gt: newStartTime }
                     },
                     // Cas 2: Nouvel examen contient complètement un examen existant
                     {
-                        start_time: { gte: verifyConflict.start_time },
-                        end_time: { lte: verifyConflict.end_time }
+                        start_time: { gte: newStartTime },
+                        end_time: { lte: newEndTime }
                     }
                 ]
             }
@@ -626,10 +670,10 @@ const updateExam = async (req, res) => {
             }
           }
         })
-        console.log(isReserved)
-        if(isReserved){
+        console.log(conflict)
+        if(conflict){
           return res.status(409).json({
-            error: "La salle "+isReserved.room.room_name+ " affectée à cet examen est déjà réservée pour cet horaire.",
+            error: "La salle "+conflict.room.room_name+ " affectée à cet examen est déjà réservée pour la nouvelle date.",
           });
         }
       }
@@ -651,6 +695,17 @@ const updateExam = async (req, res) => {
           exam_date:true,
         }
       });
+      if(newStartTime && newEndTime){
+      const updateExamRoom =await prisma.examroom.updateMany({
+        where :{
+          exam_id: parseInt(exam_id),
+        },
+        data:{
+          start_time :newStartTime,
+          end_time :newEndTime
+        }
+      })
+      }
       if(updatedExam){
         const user_id=await prisma.user.findFirst({
           where:{
@@ -680,13 +735,13 @@ const deleteExam = async (req, res) => {
     const { exam_id } = req.params;
     try{
       const result = await prisma.$transaction(async (prisma) => {
-          // Suppression de l'entrée dans ExamRoom
-          await prisma.examroom.deleteMany({
+          // Suppression des entrées dans SupervisorExam (si applicable)
+          await prisma.supervisorexam.deleteMany({
             where: { exam_id: parseInt(exam_id) }
           });
 
-          // Suppression des entrées dans SupervisorExam (si applicable)
-          await prisma.supervisorexam.deleteMany({
+          // Suppression de l'entrée dans ExamRoom
+          await prisma.examroom.deleteMany({
             where: { exam_id: parseInt(exam_id) }
           });
 

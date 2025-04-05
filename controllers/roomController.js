@@ -7,7 +7,6 @@ const {addLog} =require('../services/schedulelogService')
 
 const getAllRooms = async (req, res) => {
   const {page}=req.params
-  const { q } = req.query || ''
     try{
         const rooms = await prisma.room.findMany(
             {
@@ -29,10 +28,9 @@ const getAllRooms = async (req, res) => {
 }
 
 const reserveExamSlot = async (req, res) => {
-    const { exam_id, room_id, start_time, end_time } = req.body;
-  
+    const { exam_id, room_id, start_time, end_time } = req.body
     try {
-      let examDate= await prisma.exam.findUnique({
+      const examDate= await prisma.exam.findUnique({
         where:{
             exam_id:parseInt(exam_id),
         },
@@ -40,6 +38,7 @@ const reserveExamSlot = async (req, res) => {
             exam_date:true,
             subject:{
                 select:{
+                    subject_id:true,
                     name:true,
                     filiere_name:true
                 }
@@ -63,8 +62,35 @@ const reserveExamSlot = async (req, res) => {
 
       if(isReserved){
         return res.status(409).json({
-          error: "Cet examen est déjà réservé !",
-                                   });
+          error: "Cet examen est déjà réservé !",});
+      }
+
+      // vérifier que tous le examens de la méme filiére sont en méme temps 
+      const existingExams = await prisma.examroom.findMany({
+        where: {
+          exam: {
+            subject: {
+              filiere_name: examDate.subject.filiere_name,
+              subject_id: examDate.subject.subject_id,
+            },
+          },
+
+        },
+        select: {
+          end_time: true,
+          start_time: true,
+          }
+      });
+      if (existingExams.length > 0) {
+        const firstStartTime = new Date(existingExams[0].start_time);
+        const firstEndTime = new Date(existingExams[0].end_time);
+        const sameStartTime = firstStartTime.getTime() === startDateTime.getTime();
+        const sameEndTime = firstEndTime.getTime() === endDateTime.getTime();
+        if (!sameStartTime || !sameEndTime) {
+          return res.status(409).json({
+            error: "Tous les examens d'une matière doivent etre réservés au même moment.",
+          });
+        }
       }
       // Vérifier les conflits dans la salle donnée
       const conflicts = await prisma.examroom.findFirst({
@@ -105,7 +131,6 @@ const reserveExamSlot = async (req, res) => {
           end_time: endDateTime,
         },
       });
-
        
     return res.status(201).json({ message: "Créneau réservé avec succès" });
     } catch (err) {

@@ -48,7 +48,6 @@ const handleLogin = async (req, res) => {
 
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,maxAge: 24*60*60*1000, secure: true })
-
         //save the access token in the memory not in local storage
         res.json({ role: user.role, accessToken });
     } catch (error) {
