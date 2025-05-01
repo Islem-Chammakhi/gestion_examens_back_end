@@ -24,13 +24,13 @@ const getAllExams = async (req, res) => {
 }
 
 const getExamsBySessionId=async (req, res) => {
-  const {page,session_id}=req.params
+  const {selectedSession}=req.params
     try {
-      const session=await getSessionById(parseInt(session_id))
+      const session=await getSessionById(parseInt(selectedSession))
       if (!session) {
         return res.status(404).json({ error: "Session introuvable" });
       }
-      const exams= await getExams(page,parseInt(session_id))
+      const exams= await getExams(parseInt(selectedSession))
           if(exams){
             res.status(200).json(exams);
           }

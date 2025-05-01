@@ -11,7 +11,7 @@ const verifyRole = require('../middleware/verifyRole')
 router.get('/getAllExams/:page/:session_id',verifyRole("ADMIN"), getAllExams);
 
 // Get all exams by session id
-router.get('/getExamsBySessionId/:session_id/:page',verifyRole("ADMIN"), getExamsBySessionId);
+router.get('/getExamsBySessionId/:selectedSession',verifyRole("ADMIN"), getExamsBySessionId);
 
 // get all assigned exams 
 router.get('/getAllAssignedExams',verifyRole("ADMIN"), getAllAssignedExams);

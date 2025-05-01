@@ -3,7 +3,7 @@ const prisma = new PrismaClient()
 const {itemPerPage}=require('../config/settings');
 const { getAllRooms, getBookingsByRoomId } = require('./roomService');
 
-const getExams=async(page,session_id)=>{
+const getExams=async(session_id)=>{
     return  prisma.exam.findMany({
                 where:{
                   session_id:session_id
@@ -17,8 +17,12 @@ const getExams=async(page,session_id)=>{
                         subject_id:true,
                         name:true,
                         coefficient:true,
-                        department_id:true,
                         filiere_name:true,
+                        department:{
+                            select:{
+                                name:true,
+                            }
+                        }
     
                     }
                   },
@@ -48,8 +52,6 @@ const getExams=async(page,session_id)=>{
                   }
             
                 },
-                take:itemPerPage,
-                skip:itemPerPage * (page-1)
               });
 }
 

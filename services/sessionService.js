@@ -1,12 +1,8 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
-const { itemPerPage } = require('../config/settings');
 
-const getPaginatedSessions = async (page) => {
-  return prisma.session.findMany({
-    take: itemPerPage,
-    skip: (page - 1) * itemPerPage,
-  });
+const getAllSessions = async () => {
+  return prisma.session.findMany({});
 };
 
 const validateSessionCreation = async (sessionType, startDate) => {
@@ -118,7 +114,7 @@ const autoValidateSession = async () => {
 }
 
 module.exports = {
-  getPaginatedSessions,
+  getAllSessions,
   validateSessionCreation,
   createSession,
   getCurrentSession,

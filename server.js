@@ -54,14 +54,5 @@ app.use('/api/subjects', subjectRoutes)
 app.listen(port, async () => {
   console.log(`Serveur démarré sur le port ${port}`);
 
-    // Exécution immédiate si nécessaire
-    const result =await autoValidateSession().catch(console.error);
-    console.log(result)
-    // Planification quotidienne
-    cron.schedule('0 0 * * *', () => {
-      autoValidateSession()
-        .then(result => console.log(`Auto-validation: ${result} sessions`))
-        .catch(console.error);
-    });
 });
 

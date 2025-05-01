@@ -1,14 +1,13 @@
 const {
-    getPaginatedSessions,
+    getAllSessions,
     validateSessionCreation,
     createSession,
     getCurrentSession,
   } = require('../services/sessionService');
 
 const getSessions = async (req, res) => {
-    const {page}=req.params
     try{
-        const sessions = await getPaginatedSessions(page);
+        const sessions = await getAllSessions();
         res.status(200).json(sessions);
     }catch(err){
         console.error(err);
