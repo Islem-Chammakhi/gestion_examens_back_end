@@ -15,6 +15,7 @@ const supervisorRoutes = require('./routes/supervisorRoutes');
 const validationRoutes = require('./routes/validationRoutes');
 const subjectRoutes = require('./routes/subjectRoutes');
 const sessionRoutes = require('./routes/sessionRoutes');
+const notificationRoutes = require('./routes/notificationRoutes')
 
 //middleware
 const verifyJWT = require('./middleware/verifyJWT');
@@ -48,7 +49,7 @@ app.use('/api/rooms', roomRoutes);
 app.use('/api/supervisors', supervisorRoutes)
 app.use('/api/validateExams', validationRoutes)
 app.use('/api/subjects', subjectRoutes)
-
+app.use('/api/notifications', notificationRoutes)
 
 // Démarrer le serveur
 app.listen(port, async () => {
